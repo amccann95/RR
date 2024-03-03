@@ -1,0 +1,123 @@
+function [REC,DET,ENT,DIV,trend,tranche,RP] = recurrence_plot(A,coef,Aff);
+
+%[REC,DET,ENT,DIV,trend,tranche] = recurrence_plot(A,coef,Aff);
+% computes and displays the recurrence plot for data matrix A
+% data vectors -> rows of A, matrix containing embedded vectors
+% the distance threshold for the plot is coef*std(signal)
+% Aff=0 no display, Aff=1 recurrence plot only, Aff=2 1st column of A (seq
+% of RR intervals)
+% REC,DET,ENT,DIV,trend: parameters extracted, see:
+% J Gao, H Cai. On the structures and quantification of recurrence plots.
+% Phys Lett A 2000:75-87.
+% tranche: sum of recurring points on the anti-diagonal
+
+ep = coef * sqrt(sum(var(A,1)));
+[N,d] = size(A);
+
+RP = [];
+for k=1:N,
+    D = A - kron(A(k,:),ones(N,1));
+    D = sqrt(sum(D.^2,2));
+    RP = [RP (D<ep)];
+end
+
+% Computation of histogram Hlen of segment lengths
+g = [-1 1];
+Hlen = zeros(N-1,1);
+for k=1:N-1,
+    D = diag(RP,k);
+    DD = filter(g,1,D);
+    deb = find(DD==-1);
+    fin = find(DD==1);
+    if sum(D)==N-k,
+        Hlen(N-k) = Hlen(N-k) + 1;
+    end
+    if (sum(D)<N-k)&(length(deb)==1)&(length(fin)==0),
+        Hlen(N-k-deb+1) = Hlen(N-k-deb+1) + 1;
+    end
+    if (length(deb)==length(fin))&(length(deb)>0),
+        for p=1:length(deb),
+            Hlen(fin(p)-deb(p)) = Hlen(fin(p)-deb(p)) + 1;
+        end
+    end
+    if (length(deb)==length(fin)+1)&(length(deb)>1),
+        for p=1:length(deb)-1,
+            Hlen(fin(p)-deb(p)) = Hlen(fin(p)-deb(p)) + 1;
+        end
+        Hlen(N-k-deb(end)+1) = Hlen(N-k-deb(end)+1) + 1;
+    end
+end
+
+% Computation of REC and DET
+totpoints = 0;
+markedpoints = 0;
+for k = 1:N-1,
+    D = diag(RP,k);
+    totpoints = totpoints + length(D);
+    markedpoints = markedpoints + sum(D);
+end
+REC = markedpoints/totpoints;
+if markedpoints == 0
+    DET = 0;
+else
+    DET = (markedpoints - Hlen(1))/markedpoints;
+end
+
+% Computation of ENT
+Ind = find(Hlen>0);
+den = sum(Hlen);
+ENT = 0;
+for k=1:length(Ind),
+    ENT = ENT - (Hlen(Ind(k))/den)*log(Hlen(Ind(k))/den);
+end
+ENT = ENT/log(2);
+
+% Computation of DIV
+if Ind == 0
+    DIV = 0;
+else
+    DIV = 1/max(Ind);
+end
+
+% Computation of trend
+delta = [];
+for k=1:N-1,
+    D = diag(RP,k);
+    delta = [delta sum(D>0)/(N-k)];
+end
+P = polyfit((1:N-1),delta,1);
+trend = P(1);
+
+% Computation of tranche
+tranche = [fliplr(delta) 1 delta];
+    
+% display
+switch Aff,
+    case 0,
+        ;
+    case 1,
+        imagesc(RP==0);
+        colormap('gray')
+        axis('square')
+        set(gca,'Ydir','normal');
+        title(sprintf('REC = %.2f, DET = %.2f', REC, DET));
+    case 2,
+        subplot('Position',[0.3 0.1 0.5 0.6])
+        imagesc(RP==0)
+        colormap('gray')
+        axis off
+        set(gca,'Ydir','normal')
+        subplot('Position',[0.15 0.1 0.1 0.6])
+        plot(A(:,1),1:N)
+        set(gca,'Xcolor',[1 1 1])
+        set(gca,'Ycolor',[1 1 1])
+        set(gca,'Ylim',[0 length(A(:,1))])
+        subplot('Position',[0.3 0.75 0.5 0.12])
+        plot(1:N,A(:,1))
+        set(gca,'Xcolor',[1 1 1])
+        set(gca,'Ycolor',[1 1 1])
+        set(gca,'Xlim',[0 length(A(:,1))])
+end
+        
+% subplot(111)
+
